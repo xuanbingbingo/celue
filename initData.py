@@ -1,3 +1,4 @@
+#初始化stock_data
 import baostock as bs
 import pandas as pd
 import os

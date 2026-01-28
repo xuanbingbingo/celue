@@ -1,4 +1,4 @@
-# 强制同步概念数据到本地
+# 拉取最新的概念数据并生成映射数据到本地
 
 # sync_concepts.py
 from utils.data_tools import update_concept_cache
