@@ -1,2 +1,2 @@
-2026-01-28 15:26:37,214 - INFO - 🚀 开始同步概念板块数据 | 日期: 20260128
-2026-01-28 15:26:42,387 - CRITICAL - 全局同步崩溃: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+2026-01-28 15:47:43,718 - INFO - 🚀 启动增强版同步 (抗封锁模式) | 日期: 20260128
+2026-01-28 15:47:49,219 - ERROR - 全局同步崩溃: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
