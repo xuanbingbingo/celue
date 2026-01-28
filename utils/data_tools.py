@@ -5,51 +5,83 @@ import webbrowser
 import platform
 import pandas as pd
 import akshare as ak
+import logging
 from tqdm import tqdm
 
-# 配置缓存文件名
+# 配置日志：同时输出到文件，使用 UTF-8 编码防止中文乱码
+logging.basicConfig(
+    filename='sync_debug.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    encoding='utf-8',
+    filemode='w' # 每次运行覆盖旧日志，若想追加请改为 'a'
+)
+
 CONCEPT_CACHE = "concept_cache.json"
 
-# ================= 1. 数据同步与加载逻辑 =================
-
 def update_concept_cache():
-    """
-    强制同步东方财富热门概念数据并持久化到 JSON
-    """
     today = datetime.datetime.now().strftime('%Y%m%d')
-    print(f"🔄 启动概念板块同步 [日期: {today}]...")
+    logging.info(f"🚀 开始同步概念板块数据 | 日期: {today}")
+    print(f"🔄 正在同步数据，详情请查看 sync_debug.log...")
     
     concept_map = {}
     try:
-        # 获取概念板块列表
         df_concepts = ak.stock_board_concept_name_em()
-        # 取前 200 个热门概念，兼顾速度与质量
+        if df_concepts.empty:
+            logging.error("无法获取概念板块列表")
+            return
+
         concept_list = df_concepts['板块名称'].tolist()[:200] 
 
-        for name in tqdm(concept_list, desc="解析题材成分"):
+        for name in tqdm(concept_list, desc="同步中"):
             try:
-                # 获取该板块下的个股
                 df_members = ak.stock_board_concept_cons_em(symbol=name)
-                for code in df_members['代码'].tolist():
-                    if code not in concept_map:
-                        concept_map[code] = []
-                    # 每只股票保留前 3 个最相关的热门概念
-                    if name not in concept_map[code] and len(concept_map[code]) < 3:
-                        concept_map[code].append(name)
-            except:
+                
+                # --- 将 Debug 信息写入日志而非控制台 ---
+                logging.info(f"--- 正在解析板块: {name} ---")
+                if df_members.empty:
+                    logging.warning(f"板块 {name} 返回数据为空")
+                    continue
+                
+                logging.info(f"列名: {df_members.columns.tolist()}")
+                logging.info(f"数据样板:\n{df_members.head(3).to_string()}") 
+                # ------------------------------------
+
+                # 动态寻找代码列
+                code_col = next((col for col in df_members.columns if '代码' in col), None)
+                
+                if not code_col:
+                    logging.error(f"板块 {name} 未找到包含'代码'的列")
+                    continue
+
+                count_added = 0
+                for code in df_members[code_col].tolist():
+                    pure_code = str(code).zfill(6)
+                    # 适配逻辑...
+                    if pure_code not in concept_map:
+                        concept_map[pure_code] = []
+                    if name not in concept_map[pure_code] and len(concept_map[pure_code]) < 3:
+                        concept_map[pure_code].append(name)
+                        count_added += 1
+                
+                logging.info(f"成功关联 {count_added} 只个股")
+
+            except Exception as e:
+                logging.error(f"处理板块 {name} 时发生异常: {str(e)}")
                 continue
 
-        # 格式化数据：将列表转为 "A / B" 字符串，方便 HTML 渲染
+        # 结果保存
         final_data = {k: " / ".join(v) for k, v in concept_map.items()}
-        
-        # 写入缓存
-        with open(CONCEPT_CACHE, 'w', encoding='utf-8') as f:
-            json.dump({'date': today, 'data': final_data}, f, ensure_ascii=False)
-        
-        print(f"\n✨ 同步成功！共记录 {len(final_data)} 只个股的概念映射。")
-    except Exception as e:
-        print(f"❌ 同步失败: {e}")
+        if final_data:
+            with open(CONCEPT_CACHE, 'w', encoding='utf-8') as f:
+                json.dump({'date': today, 'data': final_data}, f, ensure_ascii=False)
+            logging.info(f"✅ 同步圆满完成，共记录 {len(final_data)} 只个股")
+            print(f"✨ 同步成功！共记录 {len(final_data)} 只个股。")
+        else:
+            logging.critical("❌ 同步结束但结果为空字典！")
 
+    except Exception as e:
+        logging.critical(f"全局同步崩溃: {str(e)}")
 def load_concept_map():
     """
     从本地加载缓存，不联网。主程序 main.py 调用此方法。
