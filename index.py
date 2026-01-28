@@ -5,7 +5,7 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 从 utils/data_tools 导入
-from utils.data_tools import get_concept_map_cached, generate_report
+from utils.data_tools import load_concept_map, generate_report
 from strategies import ma5_support 
 
 DATA_DIR = "./stock_data"
@@ -51,8 +51,8 @@ def run_scanner(strategy_name):
 
     print(f"⚡ 启动量价+题材扫描 | 策略: {strategy_name}")
     
-    # 1. 获取概念地图
-    concept_map = get_concept_map_cached()
+    # 1. 获取概念地图，直接秒读本地磁盘
+    concept_map = load_concept_map()
     
     # 2. 获取待扫描文件
     if not os.path.exists(DATA_DIR):
