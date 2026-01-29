@@ -3,7 +3,7 @@ import baostock as bs
 import pandas as pd
 import os
 from datetime import datetime
-
+DATA_DIR = './stock_data'
 def update_stock_data():
     bs.login()
     today = datetime.now().strftime("%Y-%m-%d")
@@ -45,3 +45,5 @@ def update_stock_data():
             
     bs.logout()
     print(f"✅ {today} 增量数据同步完成！")
+if __name__ == "__main__":
+    update_stock_data()
