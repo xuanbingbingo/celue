@@ -10,6 +10,78 @@ from strategies import ma5_support
 
 DATA_DIR = "./stock_data"
 
+def analyze_single_stock(code: str, strategy: str = "ma5"):
+    """
+    分析单只股票
+    code: "600519" 或 "sh.600519" 或 "sz.000001"
+    strategy: 策略名称，默认 "ma5"
+    返回: dict 包含分析结果，如果股票不存在或数据不足返回 None
+    """
+    # 1. 加载策略
+    strat_map = {
+        'ma5': ma5_support.analyze,
+    }
+    analyze_func = strat_map.get(strategy)
+    if not analyze_func:
+        return {"error": f"找不到策略: {strategy}"}
+    
+    # 2. 处理代码格式
+    if '.' in code:
+        # 已经是 sh.600519 格式
+        full_code = code
+        pure_code = code.split('.')[1]
+    else:
+        # 纯数字代码，需要判断 sh 还是 sz
+        pure_code = code
+        if code.startswith('6'):
+            full_code = f"sh.{code}"
+        elif code.startswith('0') or code.startswith('3'):
+            full_code = f"sz.{code}"
+        elif code.startswith('8') or code.startswith('4') or code.startswith('92'):
+            full_code = f"bj.{code}"
+        else:
+            return {"error": f"无法识别股票代码: {code}"}
+    
+    # 3. 加载股票数据
+    file_path = os.path.join(DATA_DIR, f"{full_code}.csv")
+    if not os.path.exists(file_path):
+        return {"error": f"股票数据不存在: {code}"}
+    
+    try:
+        df = pd.read_csv(file_path)
+        if df.empty or len(df) < 60:
+            return {"error": f"股票数据不足: {code}"}
+        
+        # 4. 分析
+        stage = analyze_func(df)
+        
+        # 5. 计算额外指标
+        df['MA5'] = df['close'].rolling(5).mean()
+        df['MA30'] = df['close'].rolling(30).mean()
+        
+        curr = df.iloc[-1]
+        prev = df.iloc[-2]
+        pct = round((curr['close'] - prev['close']) / prev['close'] * 100, 2)
+        
+        # 6. 加载概念
+        concept_map = load_concept_map()
+        concepts = concept_map.get(pure_code, "未分类")
+        
+        return {
+            "代码": pure_code,
+            "完整代码": full_code,
+            "现价": float(curr['close']),
+            "涨跌幅": f"{pct}%",
+            "阶段": stage,
+            "概念": concepts,
+            "MA5": round(float(curr['MA5']), 2) if not pd.isna(curr['MA5']) else None,
+            "MA30": round(float(curr['MA30']), 2) if not pd.isna(curr['MA30']) else None,
+            "成交量": int(curr['volume']),
+            "数据日期": str(curr['date'])
+        }
+    except Exception as e:
+        return {"error": f"分析失败: {str(e)}"}
+
 def process_file(file_name, concept_map, analyze_func):
     """
     单个文件处理函数，包含概念映射

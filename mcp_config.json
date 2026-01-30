@@ -1,0 +1,47 @@
+{
+  "mcpServers": {
+    "stock-scanner": {
+      "name": "股票策略扫描器",
+      "description": "提供股票MA5策略扫描、数据分析、报告生成等功能",
+      "command": "python3",
+      "args": ["/Users/libin/Documents/trae_projects/celue/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "/Users/libin/Documents/trae_projects/celue"
+      },
+      "tools": [
+        {
+          "name": "run_scanner",
+          "description": "执行完整的股票策略扫描流程：加载概念数据→扫描所有股票→生成HTML报告"
+        },
+        {
+          "name": "analyze_single_stock",
+          "description": "分析单只股票的策略信号，返回阶段、价格、概念等信息"
+        },
+        {
+          "name": "init_stock_data",
+          "description": "初始化股票历史数据，从BaoStock下载2025-01-01至今的数据"
+        },
+        {
+          "name": "update_stock_data",
+          "description": "增量更新股票数据，下载最新交易日的数据"
+        },
+        {
+          "name": "sync_concepts",
+          "description": "同步东方财富概念板块数据到本地缓存"
+        },
+        {
+          "name": "get_concept_list",
+          "description": "获取所有概念板块列表"
+        },
+        {
+          "name": "get_data_status",
+          "description": "检查本地数据状态：股票数据数量、最后更新日期、概念缓存日期"
+        },
+        {
+          "name": "get_stock_concept",
+          "description": "获取指定股票的概念板块"
+        }
+      ]
+    }
+  }
+}

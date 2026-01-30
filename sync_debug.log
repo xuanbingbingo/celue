@@ -1,0 +1,40 @@
+2026-01-30 12:09:03,896 - WARNING - Failed to validate notification: 12 validation errors for ClientNotification
+CancelledNotification.method
+  Input should be 'notifications/cancelled' [type=literal_error, input_value='initialized', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+ProgressNotification.method
+  Input should be 'notifications/progress' [type=literal_error, input_value='initialized', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+ProgressNotification.params.progressToken
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+ProgressNotification.params.progress
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+InitializedNotification.method
+  Input should be 'notifications/initialized' [type=literal_error, input_value='initialized', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+RootsListChangedNotification.method
+  Input should be 'notifications/roots/list_changed' [type=literal_error, input_value='initialized', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+TaskStatusNotification.method
+  Input should be 'notifications/tasks/status' [type=literal_error, input_value='initialized', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/literal_error
+TaskStatusNotification.params.taskId
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+TaskStatusNotification.params.status
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+TaskStatusNotification.params.createdAt
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+TaskStatusNotification.params.lastUpdatedAt
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+TaskStatusNotification.params.ttl
+  Field required [type=missing, input_value={}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing. Message was: method='initialized' params={} jsonrpc='2.0'
+2026-01-30 12:09:03,897 - INFO - Processing request of type ListToolsRequest
+2026-01-30 12:09:03,900 - INFO - Processing request of type CallToolRequest
+2026-01-30 12:09:03,941 - INFO - Processing request of type CallToolRequest
