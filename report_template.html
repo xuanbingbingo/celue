@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>量化扫描仪表盘</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script>
+        // 数据占位符 - Python后端会替换这里
+        window.scannerData = {{DATA_PLACEHOLDER}};
+    </script>
+    <script type="text/babel">
+const { useState, useMemo } = React;
+
+// ===== Utils =====
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  } else {
+    // 降级方案
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-999999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+    } catch (err) {
+      console.error('复制失败:', err);
+    }
+    document.body.removeChild(textarea);
+    return Promise.resolve();
+  }
+}
+
+function generateSnapshot(stocks, strategyName, filterText) {
+  // 创建画布
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // 设置尺寸
+  const width = 1400;
+  const padding = 60;
+  const rowHeight = 50;
+  const headerHeight = 100;
+  const footerHeight = 60;
+  const stocksPerRow = 4;
+  const rows = Math.ceil(stocks.length / stocksPerRow);
+  const contentHeight = rows * rowHeight;
+  const height = headerHeight + contentHeight + footerHeight + padding * 2;
+
+  canvas.width = width;
+  canvas.height = height;
+
+  // 绘制背景
+  ctx.fillStyle = '#fafafa';
+  ctx.fillRect(0, 0, width, height);
+
+  // 绘制标题背景
+  ctx.fillStyle = '#1e40af';
+  ctx.fillRect(0, 0, width, headerHeight);
+
+  // 绘制标题
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 36px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`策略: ${strategyName} | ${filterText}`, width / 2, 60);
+
+  // 绘制股票信息
+  const startY = headerHeight + padding;
+  const stockWidth = (width - padding * 2) / stocksPerRow;
+
+  stocks.forEach((stock, i) => {
+    const row = Math.floor(i / stocksPerRow);
+    const col = i % stocksPerRow;
+    const x = padding + col * stockWidth + 10;
+    const y = startY + row * rowHeight + 10;
+    const boxW = stockWidth - 20;
+    const boxH = rowHeight - 10;
+
+    // 绘制背景框
+    ctx.fillStyle = 'white';
+    ctx.fillRect(x, y, boxW, boxH);
+    ctx.strokeStyle = '#d1d5db';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, boxW, boxH);
+
+    // 绘制股票名称（左侧）
+    ctx.fillStyle = '#374151';
+    ctx.font = 'bold 18px Helvetica, Arial, sans-serif';
+    ctx.textAlign = 'left';
+    const nameX = x + 15;
+    const centerY = y + boxH / 2 + 6;
+    ctx.fillText(stock.name, nameX, centerY);
+
+    // 绘制股票代码（右侧）
+    ctx.fillStyle = '#1e40af';
+    ctx.font = '16px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    const codeX = x + boxW - 15;
+    ctx.fillText(stock.code, codeX, centerY);
+  });
+
+  // 绘制底部信息
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '16px Helvetica, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  const now = new Date().toLocaleString('zh-CN');
+  ctx.fillText(`共 ${stocks.length} 只股票 | 生成时间: ${now}`, width / 2, height - 25);
+
+  // 下载图片
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeFilterText = filterText.replace(/\s+/g, '_').replace(/[\/\\:*?"<>|]/g, '');
+    a.download = `strategy_snapshot_${strategyName}_${safeFilterText}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
+
+
+// ===== Components =====
+
+function Header({ strategyName, totalHit, totalScanned, reportTime }) {
+  const hitRate = totalScanned > 0 ? ((totalHit / totalScanned) * 100).toFixed(2) : 0;
+
+  return (
+    <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-6 mb-5 shadow-xl">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+            🎯 量化扫描仪表盘
+          </h1>
+          <p className="text-gray-500 mt-1">{strategyName}</p>
+        </div>
+        
+        <div className="flex flex-wrap gap-4">
+          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 px-5 py-3 rounded-xl border border-indigo-100">
+            <div className="text-xs text-gray-500 mb-1">扫描总数</div>
+            <div className="text-xl font-bold text-indigo-600">{totalScanned.toLocaleString()}</div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 px-5 py-3 rounded-xl border border-emerald-100">
+            <div className="text-xs text-gray-500 mb-1">符合条件</div>
+            <div className="text-xl font-bold text-emerald-600">{totalHit.toLocaleString()}</div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 px-5 py-3 rounded-xl border border-amber-100">
+            <div className="text-xs text-gray-500 mb-1">命中率</div>
+            <div className="text-xl font-bold text-amber-600">{hitRate}%</div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-slate-50 to-gray-50 px-5 py-3 rounded-xl border border-slate-100">
+            <div className="text-xs text-gray-500 mb-1">报告时间</div>
+            <div className="text-sm font-semibold text-slate-600">{reportTime}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Header;
+
+
+function StageCards({ stats, stageConfig, activeStage, onStageClick }) {
+  const stageOrder = ['🚀 启动期（重点）', '🚀 启动期', '🧪 蓄势中', '🏖️ 整理区'];
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+      {stageOrder.map(stage => {
+        const count = stats[stage] || 0;
+        if (count === 0) return null;
+
+        const config = stageConfig[stage];
+        const isActive = activeStage === stage;
+        const stageClass = stage.replace(/[🚀🧪🏖️\s（）]/g, '');
+
+        return (
+          <div
+            key={stage}
+            onClick={() => onStageClick(stage)}
+            className={`
+              ${config.bg} border-2 ${config.border} rounded-2xl p-5 cursor-pointer
+              transition-all duration-300 hover:-translate-y-1 hover:shadow-xl
+              ${isActive ? 'ring-4 ring-offset-2 ring-indigo-300 scale-105' : ''}
+            `}
+          >
+            <div className={`text-sm font-semibold ${config.text} mb-2`}>{stage}</div>
+            <div className={`text-3xl font-bold ${config.text} mb-2`}>{count}</div>
+            <div className="text-xs text-gray-500">{config.desc}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+StageCards;
+
+
+function ConceptCloud({ concepts, activeConcept, onConceptClick }) {
+  if (concepts.length === 0) return null;
+
+  return (
+    <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 mb-5 shadow-xl">
+      <h3 className="text-sm font-semibold text-gray-600 mb-3">🏷️ 概念板块</h3>
+      <div className="flex flex-wrap gap-2">
+        {concepts.map(concept => {
+          const isActive = activeConcept === concept;
+          return (
+            <span
+              key={concept}
+              onClick={(e) => {
+                e.stopPropagation();
+                onConceptClick(concept);
+              }}
+              className={`
+                px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer
+                transition-all duration-200
+                ${isActive 
+                  ? 'bg-gradient-to-r from-sky-500 to-sky-600 text-white shadow-md' 
+                  : 'bg-gradient-to-r from-sky-50 to-sky-100 text-sky-700 hover:-translate-y-0.5 hover:shadow-md'
+                }
+              `}
+            >
+              {concept}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+ConceptCloud;
+
+
+function StockTable({ stocks, stageConfig, onConceptClick }) {
+  const getStageStyle = (stage) => {
+    const config = stageConfig[stage];
+    if (!config) return {};
+    
+    const colorMap = {
+      'bg-red-100': '#fef2f2',
+      'bg-amber-100': '#fffbeb',
+      'bg-blue-100': '#eff6ff',
+      'bg-emerald-100': '#ecfdf5',
+    };
+    
+    const textColorMap = {
+      'text-red-800': '#991b1b',
+      'text-amber-800': '#92400e',
+      'text-blue-800': '#1e40af',
+      'text-emerald-800': '#065f46',
+    };
+    
+    return {
+      backgroundColor: colorMap[config.bg] || '#f3f4f6',
+      color: textColorMap[config.text] || '#374151',
+    };
+  };
+
+  const getChangeStyle = (changeStr) => {
+    const change = parseFloat(changeStr.replace('%', ''));
+    const isUp = change >= 0;
+    return {
+      className: isUp 
+        ? 'text-red-600 bg-red-50 px-3 py-1 rounded-lg font-bold' 
+        : 'text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg font-bold',
+      icon: isUp ? '📈' : '📉'
+    };
+  };
+
+  if (stocks.length === 0) {
+    return (
+      <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-10 text-center shadow-xl">
+        <div className="text-6xl mb-4">📭</div>
+        <div className="text-gray-500 text-lg">暂无符合条件的标的</div>
+        <div className="text-gray-400 text-sm mt-2">请尝试调整筛选条件</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white/90 backdrop-blur-sm rounded-2xl overflow-hidden shadow-xl">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-gray-200">
+              <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">状态</th>
+              <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">名称</th>
+              <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">代码</th>
+              <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">现价</th>
+              <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">涨跌幅</th>
+              <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">概念板块</th>
+              <th className="px-4 py-4 text-left text-sm font-semibold text-gray-600">详情</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stocks.map((stock, index) => {
+              const changeStyle = getChangeStyle(stock.change);
+              const stageStyle = getStageStyle(stock.stage);
+              const concepts = stock.concepts ? stock.concepts.split(' / ') : [];
+              const m = stock.fullCode?.startsWith('sh') ? 'sh' : 'sz';
+              const url = `https://quote.eastmoney.com/concept/${m}${stock.code}.html`;
+
+              return (
+                <tr 
+                  key={stock.code} 
+                  className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors animate-fade-in"
+                  style={{ animationDelay: `${index * 0.03}s` }}
+                >
+                  <td className="px-4 py-4">
+                    <span 
+                      className="inline-block px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={stageStyle}
+                    >
+                      {stock.stage}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="font-semibold text-gray-700 text-sm max-w-[120px] truncate inline-block">
+                      {stock.name}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="font-mono font-bold text-gray-800 text-sm">
+                      {stock.code}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="font-bold text-gray-800">
+                      ¥{stock.price}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className={changeStyle.className}>
+                      {changeStyle.icon} {stock.change}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {concepts.map(concept => (
+                        <span
+                          key={concept}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onConceptClick(concept);
+                          }}
+                          className="px-2 py-0.5 bg-sky-50 text-sky-600 rounded-full text-xs cursor-pointer hover:bg-sky-100 transition-colors"
+                        >
+                          {concept}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <a 
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center w-9 h-9 bg-gradient-to-br from-slate-100 to-slate-200 rounded-lg hover:from-indigo-500 hover:to-purple-600 hover:scale-110 transition-all duration-300 group"
+                    >
+                      <svg 
+                        width="18" 
+                        height="18" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="2"
+                        className="text-slate-500 group-hover:text-white transition-colors"
+                      >
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                      </svg>
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+StockTable;
+
+
+function Toast({ show, message }) {
+  if (!show) return null;
+
+  return (
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-xl shadow-2xl z-50 animate-fade-in">
+      {message}
+    </div>
+  );
+}
+
+Toast;
+
+
+// ===== Dashboard =====
+
+// 阶段配置
+const STAGE_CONFIG = {
+  '🚀 启动期（重点）': {
+    bg: 'bg-red-100',
+    border: 'border-red-400',
+    text: 'text-red-800',
+    desc: '出现关键突破形态，强烈建议关注'
+  },
+  '🚀 启动期': {
+    bg: 'bg-amber-100',
+    border: 'border-amber-400',
+    text: 'text-amber-800',
+    desc: '已突破 + 回踩确认，建议关注'
+  },
+  '🧪 蓄势中': {
+    bg: 'bg-blue-100',
+    border: 'border-blue-400',
+    text: 'text-blue-800',
+    desc: '吸筹完成 + 洗盘结束，等待突破'
+  },
+  '🏖️ 整理区': {
+    bg: 'bg-emerald-100',
+    border: 'border-emerald-400',
+    text: 'text-emerald-800',
+    desc: '吸筹中或横盘整理，观察为主'
+  }
+}
+
+function Dashboard({ data }) {
+  const [stageFilter, setStageFilter] = useState(null)
+  const [conceptFilter, setConceptFilter] = useState(null)
+  const [toast, setToast] = useState({ show: false, message: '' })
+
+  // 计算统计数据
+  const stats = useMemo(() => {
+    const stageCounts = {}
+    data.results.forEach(r => {
+      stageCounts[r.stage] = (stageCounts[r.stage] || 0) + 1
+    })
+    return stageCounts
+  }, [data])
+
+  // 提取所有概念
+  const allConcepts = useMemo(() => {
+    const concepts = new Set()
+    data.results.forEach(r => {
+      if (r.concepts) {
+        r.concepts.split(' / ').forEach(c => concepts.add(c))
+      }
+    })
+    return Array.from(concepts).sort()
+  }, [data])
+
+  // 筛选后的数据
+  const filteredResults = useMemo(() => {
+    return data.results.filter(r => {
+      if (stageFilter && r.stage !== stageFilter) return false
+      if (conceptFilter && (!r.concepts || !r.concepts.includes(conceptFilter))) return false
+      return true
+    })
+  }, [data, stageFilter, conceptFilter])
+
+  // 显示Toast
+  const showToast = (message) => {
+    setToast({ show: true, message })
+    setTimeout(() => setToast({ show: false, message: '' }), 2000)
+  }
+
+  // 重置筛选
+  const resetFilters = () => {
+    setStageFilter(null)
+    setConceptFilter(null)
+  }
+
+  // 复制全部代码
+  const copyAllCodes = () => {
+    const codes = filteredResults.map(r => r.code).join(',')
+    if (codes) {
+      copyToClipboard(codes)
+      showToast('✅ 已复制到剪贴板')
+    } else {
+      showToast('⚠️ 没有可复制的代码')
+    }
+  }
+
+  // 保存快照
+  const saveSnapshot = () => {
+    if (filteredResults.length === 0) {
+      showToast('⚠️ 没有可保存的股票')
+      return
+    }
+
+    const stocks = filteredResults.map(r => ({
+      code: r.code,
+      name: r.name
+    }))
+
+    const filterText = stageFilter || conceptFilter || '全部标的'
+    generateSnapshot(stocks, data.strategyName, filterText)
+    showToast('✅ 快照已保存')
+  }
+
+  const currentFilterText = conceptFilter ? `概念: ${conceptFilter}` : (stageFilter || '全部标的')
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-5">
+      <div className="max-w-7xl mx-auto">
+        {/* 头部 */}
+        <Header 
+          strategyName={data.strategyDisplayName}
+          totalHit={data.totalHit}
+          totalScanned={data.totalScanned}
+          reportTime={new Date().toLocaleString('zh-CN')}
+        />
+
+        {/* 阶段卡片 */}
+        <StageCards 
+          stats={stats}
+          stageConfig={STAGE_CONFIG}
+          activeStage={stageFilter}
+          onStageClick={setStageFilter}
+        />
+
+        {/* 概念云 */}
+        <ConceptCloud 
+          concepts={allConcepts}
+          activeConcept={conceptFilter}
+          onConceptClick={setConceptFilter}
+        />
+
+        {/* 操作栏 */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 mb-5 shadow-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="text-gray-600">
+              当前显示: <span className="font-semibold text-gray-800">{currentFilterText}</span> | 
+              共 <span className="font-semibold text-gray-800">{filteredResults.length}</span> 条
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={resetFilters}
+                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2"
+              >
+                🔄 重置筛选
+              </button>
+              <button 
+                onClick={saveSnapshot}
+                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2"
+              >
+                📸 保存快照
+              </button>
+              <button 
+                onClick={copyAllCodes}
+                className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
+              >
+                📋 复制全部代码
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 代码框 */}
+        <div 
+          onClick={() => {
+            const codes = filteredResults.map(r => r.code).join(',')
+            copyToClipboard(codes)
+            showToast('✅ 已复制到剪贴板')
+          }}
+          className="bg-gradient-to-r from-slate-800 to-slate-900 text-sky-400 p-4 rounded-xl mb-5 cursor-pointer hover:shadow-xl transition-all duration-300 flex justify-between items-center"
+        >
+          <span className="font-mono text-sm truncate max-w-[calc(100%-100px)]">
+            {filteredResults.map(r => r.code).join(',')}
+          </span>
+          <span className="text-xs text-gray-400 bg-white/10 px-3 py-1 rounded-lg">点击复制</span>
+        </div>
+
+        {/* 股票表格 */}
+        <StockTable 
+          stocks={filteredResults}
+          stageConfig={STAGE_CONFIG}
+          onConceptClick={setConceptFilter}
+        />
+      </div>
+
+      {/* Toast */}
+      <Toast show={toast.show} message={toast.message} />
+    </div>
+  )
+}
+
+Dashboard
+
+
+// ===== App =====
+
+function App() {
+  // 从全局变量获取数据
+  const data = window.scannerData || { 
+    results: [], 
+    strategyName: 'ma5', 
+    strategyDisplayName: 'MA5均线支撑策略',
+    totalScanned: 0,
+    totalHit: 0
+  }
+
+  return <Dashboard data={data} />
+}
+
+App
+
+
+// ===== Render =====
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+    </script>
+</body>
+</html>
