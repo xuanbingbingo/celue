@@ -1,0 +1,44 @@
+# Node.js
+node_modules/
+
+# 生成的HTML报告（保留index.html作为模板入口）
+*.html
+!index.html
+!frontend/index.html
+!frontend/public/index.html
+
+# 日志文件
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 数据文件
+stock_data/
+*.json
+!concept_cache.json
+!stock_name_cache.json
+
+# 生成的报告
+scanner_report_*.html
+strategy_snapshot_*.png
