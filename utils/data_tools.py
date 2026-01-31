@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # 缓存与日志文件名
 CONCEPT_CACHE = "concept_cache.json"
+STOCK_NAME_CACHE = "stock_name_cache.json"
 LOG_FILE = "sync_debug.log"
 
 # 配置日志系统
@@ -110,6 +111,19 @@ def load_concept_map():
             return cache_data.get('data', {})
     except Exception as e:
         logging.error(f"加载缓存失败: {e}")
+        return {}
+
+def load_stock_name_map():
+    """
+    加载股票名称映射缓存
+    """
+    if not os.path.exists(STOCK_NAME_CACHE):
+        return {}
+    try:
+        with open(STOCK_NAME_CACHE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"加载股票名称缓存失败: {e}")
         return {}
 
 # ================= 3. 股票代码图片生成模块 =================

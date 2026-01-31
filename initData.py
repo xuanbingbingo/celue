@@ -2,10 +2,12 @@
 import baostock as bs
 import pandas as pd
 import os
+import json
 from tqdm import tqdm
 from datetime import datetime, timedelta
 
 DATA_DIR = "./stock_data"
+STOCK_NAME_CACHE = "stock_name_cache.json"
 if not os.path.exists(DATA_DIR): 
     os.makedirs(DATA_DIR)
     print(f"📁 已创建文件夹: {DATA_DIR}")
@@ -45,8 +47,19 @@ def init_database():
     start_date = "2025-01-01"
     end_date = datetime.now().strftime("%Y-%m-%d")
 
+    # 4. 创建股票名称映射缓存
+    stock_name_map = {}
+    for code, status, name in stock_list:
+        pure_code = code.split('.')[1] if '.' in code else code
+        stock_name_map[pure_code] = name
+    
+    # 保存股票名称缓存
+    with open(STOCK_NAME_CACHE, 'w', encoding='utf-8') as f:
+        json.dump(stock_name_map, f, ensure_ascii=False)
+    print(f"💾 已保存 {len(stock_name_map)} 只股票名称映射")
+
     success_count = 0
-    # 4. 循环下载
+    # 5. 循环下载
     for code, status, name in tqdm(stock_list, desc="初始化进度"):
         # 严格匹配号段：沪深主板、创业板、科创板、北交所 (920/8/4)
         pure_code = code.split('.')[1]

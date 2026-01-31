@@ -5,7 +5,7 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 从 utils/data_tools 导入
-from utils.data_tools import load_concept_map, generate_report
+from utils.data_tools import load_concept_map, load_stock_name_map, generate_report
 from strategies import ma5_support, volume_breakout
 
 DATA_DIR = "./stock_data"
@@ -94,9 +94,9 @@ def analyze_single_stock(code: str, strategy: str = "ma5"):
     except Exception as e:
         return {"error": f"分析失败: {str(e)}"}
 
-def process_file(file_name, concept_map, analyze_func):
+def process_file(file_name, concept_map, stock_name_map, analyze_func):
     """
-    单个文件处理函数，包含概念映射
+    单个文件处理函数，包含概念映射和股票名称
     """
     try:
         df = pd.read_csv(os.path.join(DATA_DIR, file_name))
@@ -114,6 +114,7 @@ def process_file(file_name, concept_map, analyze_func):
             
             return {
                 '代码': pure_code, 
+                '名称': stock_name_map.get(pure_code, ''),
                 '完整代码': full_code, 
                 '现价': curr['close'],
                 '涨跌幅': f"{pct}%", 
@@ -134,8 +135,9 @@ def run_scanner(strategy_name):
 
     print(f"⚡ 启动量价+题材扫描 | 策略: {strategy_name} ({strategy_desc})")
     
-    # 1. 获取概念地图，直接秒读本地磁盘
+    # 1. 获取概念地图和股票名称映射，直接秒读本地磁盘
     concept_map = load_concept_map()
+    stock_name_map = load_stock_name_map()
     
     # 2. 获取待扫描文件
     if not os.path.exists(DATA_DIR):
@@ -146,8 +148,8 @@ def run_scanner(strategy_name):
     results = []
     # 3. 多线程扫描
     with ThreadPoolExecutor(max_workers=40) as executor:
-        # 注意：这里把 concept_map 传进去了
-        futures = [executor.submit(process_file, f, concept_map, analyze_func) for f in files]
+        # 注意：这里把 concept_map 和 stock_name_map 传进去了
+        futures = [executor.submit(process_file, f, concept_map, stock_name_map, analyze_func) for f in files]
         for f in tqdm(as_completed(futures), total=len(futures), desc="执行扫描"):
             res = f.result()
             if res: 
