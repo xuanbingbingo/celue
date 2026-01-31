@@ -10,6 +10,7 @@ import urllib.parse
 import pandas as pd
 import akshare as ak
 from tqdm import tqdm
+from PIL import Image, ImageDraw, ImageFont
 
 # ================= 配置与初始化 =================
 
@@ -111,11 +112,108 @@ def load_concept_map():
         logging.error(f"加载缓存失败: {e}")
         return {}
 
-# ================= 3. 交互式报告生成模块 =================
+# ================= 3. 股票代码图片生成模块 =================
 
-def generate_report(results, total_scanned):
+def generate_strategy_snapshot_image(stock_codes, strategy_name='ma5'):
+    """
+    生成策略股票代码汇总快照图片（单张图片包含所有股票代码）
+    参数:
+        stock_codes: 股票代码列表
+        strategy_name: 策略名称
+    返回:
+        生成的图片路径
+    """
+    if not stock_codes:
+        return None
+    
+    # 图片尺寸设置
+    width = 1200
+    padding = 60
+    code_height = 50
+    header_height = 100
+    footer_height = 60
+    
+    # 计算所需高度
+    codes_per_row = 6  # 每行显示6个代码
+    rows = (len(stock_codes) + codes_per_row - 1) // codes_per_row
+    content_height = rows * code_height
+    height = header_height + content_height + footer_height + padding * 2
+    
+    # 创建图片（白色背景）
+    img = Image.new('RGB', (width, height), color='#fafafa')
+    draw = ImageDraw.Draw(img)
+    
+    # 尝试使用系统字体
+    try:
+        font_title = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 36)
+        font_code = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 20)
+        font_info = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 16)
+    except:
+        try:
+            font_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
+            font_code = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 20)
+            font_info = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 16)
+        except:
+            font_title = ImageFont.load_default()
+            font_code = font_title
+            font_info = font_title
+    
+    # 绘制标题背景
+    draw.rectangle([0, 0, width, header_height], fill='#1e40af')
+    
+    # 绘制标题
+    title = f"策略: {strategy_name}"
+    bbox = draw.textbbox((0, 0), title, font=font_title)
+    title_width = bbox[2] - bbox[0]
+    draw.text(((width - title_width) // 2, 30), title, font=font_title, fill='white')
+    
+    # 绘制股票代码
+    start_y = header_height + padding
+    code_width = (width - padding * 2) // codes_per_row
+    
+    for i, code in enumerate(stock_codes):
+        row = i // codes_per_row
+        col = i % codes_per_row
+        x = padding + col * code_width + 10
+        y = start_y + row * code_height + 10
+        
+        # 绘制代码背景框
+        box_x1 = x
+        box_y1 = y
+        box_x2 = x + code_width - 20
+        box_y2 = y + code_height - 10
+        draw.rectangle([box_x1, box_y1, box_x2, box_y2], fill='white', outline='#d1d5db', width=1)
+        
+        # 绘制代码文字（居中）
+        bbox = draw.textbbox((0, 0), code, font=font_code)
+        code_w = bbox[2] - bbox[0]
+        code_h = bbox[3] - bbox[1]
+        text_x = box_x1 + (box_x2 - box_x1 - code_w) // 2
+        text_y = box_y1 + (box_y2 - box_y1 - code_h) // 2
+        draw.text((text_x, text_y), code, font=font_code, fill='#1f2937')
+    
+    # 绘制底部信息
+    footer_y = height - footer_height + 20
+    info_text = f"共 {len(stock_codes)} 只股票 | 生成时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    bbox = draw.textbbox((0, 0), info_text, font=font_info)
+    info_width = bbox[2] - bbox[0]
+    draw.text(((width - info_width) // 2, footer_y), info_text, font=font_info, fill='#6b7280')
+    
+    # 保存图片
+    image_path = f"./strategy_snapshot_{strategy_name}.png"
+    img.save(image_path, 'PNG')
+    
+    return image_path
+
+# ================= 4. 交互式报告生成模块 =================
+
+def generate_report(results, total_scanned, strategy_name='ma5'):
     """
     生成数据仪表盘风格的 HTML 报告，带 Tab 切换功能
+    参数:
+        results: 扫描结果列表
+        total_scanned: 扫描总数
+        strategy_name: 策略名称，用于文件名区分
     """
     if not results:
         print("💡 无结果，跳过报告。")
@@ -123,7 +221,9 @@ def generate_report(results, total_scanned):
 
     df_res = pd.DataFrame(results).sort_values(by=['阶段', '代码'], ascending=[False, True])
     report_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-    html_file = "scanner_report.html"
+    
+    # 根据策略名生成文件名
+    html_file = f"scanner_report_{strategy_name}.html"
     all_codes = ",".join(df_res['代码'].tolist())
 
     # 统计数据
@@ -131,12 +231,45 @@ def generate_report(results, total_scanned):
     total_hit = len(df_res)
 
     # 阶段排序和颜色映射
-    stage_order = ['🚀 启动期', '🧪 蓄势中', '🏖️ 整理区']
+    # 策略二可能有"启动期（重点）"，需要特殊处理
+    stage_order = ['🚀 启动期（重点）', '🚀 启动期', '🧪 蓄势中', '🏖️ 整理区']
     stage_colors = {
+        '🚀 启动期（重点）': {'bg': '#fecaca', 'border': '#ef4444', 'text': '#991b1b', 'gradient': 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'},
         '🚀 启动期': {'bg': '#fef3c7', 'border': '#f59e0b', 'text': '#92400e', 'gradient': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'},
         '🧪 蓄势中': {'bg': '#dbeafe', 'border': '#3b82f6', 'text': '#1e40af', 'gradient': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'},
         '🏖️ 整理区': {'bg': '#d1fae5', 'border': '#10b981', 'text': '#065f46', 'gradient': 'linear-gradient(135deg, #10b981 0%, #059669 100%)'}
     }
+    
+    # 策略名称映射
+    strategy_names = {
+        'ma5': 'MA5均线支撑策略',
+        'volume_breakout': '放量突破策略'
+    }
+    strategy_display_name = strategy_names.get(strategy_name, strategy_name)
+    
+    # 阶段描述映射
+    stage_desc = {
+        '🚀 启动期（重点）': '出现关键突破形态，强烈建议关注',
+        '🚀 启动期': '已突破 + 回踩确认，建议关注',
+        '🧪 蓄势中': '吸筹完成 + 洗盘结束，等待突破',
+        '🏖️ 整理区': '吸筹中或横盘整理，观察为主'
+    }
+    
+    # 动态生成阶段卡片
+    def generate_stage_cards(counts):
+        cards_html = ""
+        for stage in stage_order:
+            count = counts.get(stage, 0)
+            if count > 0:  # 只显示有数据的阶段
+                stage_class = stage.replace('🚀 ', '').replace('🧪 ', '').replace('🏖️ ', '').replace('（', '').replace('）', '')
+                desc = stage_desc.get(stage, '')
+                cards_html += f'''
+                <div class="stage-card stage-card-{stage_class}" data-stage="{stage}" onclick="filterByStage('{stage}')">
+                    <div class="stage-name">{stage}</div>
+                    <div class="stage-count">{count}</div>
+                    <div class="stage-desc">{desc}</div>
+                </div>'''
+        return cards_html
 
     # HTML 结构定义
     html_template = f"""<!DOCTYPE html>
@@ -144,7 +277,7 @@ def generate_report(results, total_scanned):
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎯 量化扫描仪表盘</title>
+    <title>🎯 量化扫描仪表盘 - {strategy_display_name}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         
@@ -265,6 +398,7 @@ def generate_report(results, total_scanned):
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
         }}
         
+        .stage-card-启动期重点 {{ background: {stage_colors['🚀 启动期（重点）']['bg']}; color: {stage_colors['🚀 启动期（重点）']['text']}; border: 2px solid {stage_colors['🚀 启动期（重点）']['border']}; }}
         .stage-card-启动期 {{ background: {stage_colors['🚀 启动期']['bg']}; color: {stage_colors['🚀 启动期']['text']}; }}
         .stage-card-蓄势中 {{ background: {stage_colors['🧪 蓄势中']['bg']}; color: {stage_colors['🧪 蓄势中']['text']}; }}
         .stage-card-整理区 {{ background: {stage_colors['🏖️ 整理区']['bg']}; color: {stage_colors['🏖️ 整理区']['text']}; }}
@@ -443,6 +577,7 @@ def generate_report(results, total_scanned):
             font-weight: 600;
         }}
         
+        .badge-启动期重点 {{ background: {stage_colors['🚀 启动期（重点）']['bg']}; color: {stage_colors['🚀 启动期（重点）']['text']}; border: 2px solid {stage_colors['🚀 启动期（重点）']['border']}; }}
         .badge-启动期 {{ background: {stage_colors['🚀 启动期']['bg']}; color: {stage_colors['🚀 启动期']['text']}; }}
         .badge-蓄势中 {{ background: {stage_colors['🧪 蓄势中']['bg']}; color: {stage_colors['🧪 蓄势中']['text']}; }}
         .badge-整理区 {{ background: {stage_colors['🏖️ 整理区']['bg']}; color: {stage_colors['🏖️ 整理区']['text']}; }}
@@ -499,6 +634,18 @@ def generate_report(results, total_scanned):
             font-weight: 700;
             color: #1e293b;
             font-size: 15px;
+        }}
+        
+        /* 名称 */
+        .stock-name {{
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
         }}
         
         /* 代码 */
@@ -585,7 +732,7 @@ def generate_report(results, total_scanned):
         <div class="header">
             <div class="header-top">
                 <h1 class="title">🎯 量化扫描仪表盘</h1>
-                <span class="report-time">📅 {report_time}</span>
+                <span class="report-time">📅 {report_time}<br>📊 {strategy_display_name}</span>
             </div>
             
             <!-- 统计卡片 -->
@@ -606,21 +753,7 @@ def generate_report(results, total_scanned):
             
             <!-- 阶段 Tab 卡片 -->
             <div class="stage-cards">
-                <div class="stage-card stage-card-启动期" data-stage="🚀 启动期" onclick="filterByStage('🚀 启动期')">
-                    <div class="stage-name">🚀 启动期</div>
-                    <div class="stage-count">{stage_counts.get('🚀 启动期', 0)}</div>
-                    <div class="stage-desc">已突破 + 回踩确认，建议关注</div>
-                </div>
-                <div class="stage-card stage-card-蓄势中" data-stage="🧪 蓄势中" onclick="filterByStage('🧪 蓄势中')">
-                    <div class="stage-name">🧪 蓄势中</div>
-                    <div class="stage-count">{stage_counts.get('🧪 蓄势中', 0)}</div>
-                    <div class="stage-desc">吸筹完成 + 洗盘结束，等待突破</div>
-                </div>
-                <div class="stage-card stage-card-整理区" data-stage="🏖️ 整理区" data-stage="🏖️ 整理区" onclick="filterByStage('🏖️ 整理区')">
-                    <div class="stage-name">🏖️ 整理区</div>
-                    <div class="stage-count">{stage_counts.get('🏖️ 整理区', 0)}</div>
-                    <div class="stage-desc">吸筹中或横盘整理，观察为主</div>
-                </div>
+                {generate_stage_cards(stage_counts)}
             </div>
         </div>
         
@@ -634,6 +767,9 @@ def generate_report(results, total_scanned):
                 <div class="actions">
                     <button class="btn btn-secondary" onclick="resetFilter()">
                         🔄 重置筛选
+                    </button>
+                    <button class="btn btn-secondary" onclick="saveSnapshot()">
+                        📸 保存快照
                     </button>
                     <button class="btn btn-primary" onclick="copyAllCodes()">
                         📋 复制全部代码
@@ -653,6 +789,7 @@ def generate_report(results, total_scanned):
                     <thead>
                         <tr>
                             <th>状态</th>
+                            <th>名称</th>
                             <th>代码</th>
                             <th>现价</th>
                             <th>涨跌幅</th>
@@ -682,9 +819,11 @@ def generate_report(results, total_scanned):
         change_class = "change-up" if is_up else "change-down"
         change_icon = "📈" if is_up else "📉"
 
+        stock_name = r.get('名称', '')
         html_template += f"""
                         <tr class="stock-row" data-stage="{stage}" data-concepts="{r.get('概念','')}">
                             <td><span class="stage-badge badge-{stage_class}">{stage}</span></td>
+                            <td><span class="stock-name">{stock_name}</span></td>
                             <td><span class="stock-code">{r['代码']}</span></td>
                             <td><span class="price">¥{r['现价']}</span></td>
                             <td><span class="{change_class}">{change_icon} {r['涨跌幅']}</span></td>
@@ -852,6 +991,110 @@ def generate_report(results, total_scanned):
             setTimeout(() => {
                 toast.classList.remove('show');
             }, 2000);
+        }
+        
+        // 保存快照图片
+        function saveSnapshot() {
+            const visibleRows = document.querySelectorAll('.stock-row:not(.hidden)');
+            const stocks = Array.from(visibleRows).map(row => {
+                return {
+                    code: row.querySelector('.stock-code').textContent,
+                    name: row.querySelector('.stock-name').textContent
+                };
+            });
+            
+            if (stocks.length === 0) {
+                showToast('⚠️ 没有可保存的股票');
+                return;
+            }
+            
+            // 创建画布
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 设置尺寸
+            const width = 1400;
+            const padding = 60;
+            const rowHeight = 50;
+            const headerHeight = 100;
+            const footerHeight = 60;
+            const stocksPerRow = 4;
+            const rows = Math.ceil(stocks.length / stocksPerRow);
+            const contentHeight = rows * rowHeight;
+            const height = headerHeight + contentHeight + footerHeight + padding * 2;
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // 绘制背景
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(0, 0, width, height);
+            
+            // 绘制标题背景
+            ctx.fillStyle = '#1e40af';
+            ctx.fillRect(0, 0, width, headerHeight);
+            
+            // 绘制标题
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 36px Helvetica, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            const currentFilter = document.getElementById('currentFilter').textContent;
+            ctx.fillText(`策略: {strategy_name} | ${currentFilter}`, width / 2, 60);
+            
+            // 绘制股票信息
+            const startY = headerHeight + padding;
+            const stockWidth = (width - padding * 2) / stocksPerRow;
+            
+            stocks.forEach((stock, i) => {
+                const row = Math.floor(i / stocksPerRow);
+                const col = i % stocksPerRow;
+                const x = padding + col * stockWidth + 10;
+                const y = startY + row * rowHeight + 10;
+                const boxW = stockWidth - 20;
+                const boxH = rowHeight - 10;
+                
+                // 绘制背景框
+                ctx.fillStyle = 'white';
+                ctx.fillRect(x, y, boxW, boxH);
+                ctx.strokeStyle = '#d1d5db';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, boxW, boxH);
+                
+                // 绘制股票名称（左侧）
+                ctx.fillStyle = '#374151';
+                ctx.font = 'bold 18px Helvetica, Arial, sans-serif';
+                ctx.textAlign = 'left';
+                const nameX = x + 15;
+                const centerY = y + boxH / 2 + 6;
+                ctx.fillText(stock.name, nameX, centerY);
+                
+                // 绘制股票代码（右侧）
+                ctx.fillStyle = '#1e40af';
+                ctx.font = '16px "JetBrains Mono", monospace';
+                ctx.textAlign = 'right';
+                const codeX = x + boxW - 15;
+                ctx.fillText(stock.code, codeX, centerY);
+            });
+            
+            // 绘制底部信息
+            ctx.fillStyle = '#6b7280';
+            ctx.font = '16px Helvetica, Arial, sans-serif';
+            ctx.textAlign = 'center';
+            const now = new Date().toLocaleString('zh-CN');
+            ctx.fillText(`共 ${stocks.length} 只股票 | 生成时间: ${now}`, width / 2, height - 25);
+            
+            // 下载图片
+            canvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `strategy_snapshot_{strategy_name}_${currentFilter.replace(/\\s+/g, '_')}.png`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('✅ 快照已保存');
+            });
         }
         
         // 初始化

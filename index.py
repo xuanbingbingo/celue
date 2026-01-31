@@ -6,9 +6,23 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 从 utils/data_tools 导入
 from utils.data_tools import load_concept_map, generate_report
-from strategies import ma5_support 
+from strategies import ma5_support, volume_breakout
 
 DATA_DIR = "./stock_data"
+
+# 策略映射表
+STRATEGY_MAP = {
+    'ma5': {
+        'name': 'ma5',
+        'func': ma5_support.analyze,
+        'description': 'MA5均线支撑策略'
+    },
+    'volume_breakout': {
+        'name': 'volume_breakout',
+        'func': volume_breakout.analyze,
+        'description': '放量突破策略（吸筹→启动，无整理期）'
+    }
+}
 
 def analyze_single_stock(code: str, strategy: str = "ma5"):
     """
@@ -18,12 +32,10 @@ def analyze_single_stock(code: str, strategy: str = "ma5"):
     返回: dict 包含分析结果，如果股票不存在或数据不足返回 None
     """
     # 1. 加载策略
-    strat_map = {
-        'ma5': ma5_support.analyze,
-    }
-    analyze_func = strat_map.get(strategy)
-    if not analyze_func:
+    strategy_config = STRATEGY_MAP.get(strategy)
+    if not strategy_config:
         return {"error": f"找不到策略: {strategy}"}
+    analyze_func = strategy_config['func']
     
     # 2. 处理代码格式
     if '.' in code:
@@ -112,16 +124,15 @@ def process_file(file_name, concept_map, analyze_func):
         return None
 
 def run_scanner(strategy_name):
-    strat_map = {
-        'ma5': ma5_support.analyze,
-    }
-    
-    analyze_func = strat_map.get(strategy_name)
-    if not analyze_func:
+    strategy_config = STRATEGY_MAP.get(strategy_name)
+    if not strategy_config:
         print(f"❌ 找不到策略: {strategy_name}")
         return
+    
+    analyze_func = strategy_config['func']
+    strategy_desc = strategy_config['description']
 
-    print(f"⚡ 启动量价+题材扫描 | 策略: {strategy_name}")
+    print(f"⚡ 启动量价+题材扫描 | 策略: {strategy_name} ({strategy_desc})")
     
     # 1. 获取概念地图，直接秒读本地磁盘
     concept_map = load_concept_map()
@@ -142,9 +153,9 @@ def run_scanner(strategy_name):
             if res: 
                 results.append(res)
 
-    # 4. 生成报告
+    # 4. 生成报告（传入策略名用于文件名区分）
     if results:
-        generate_report(results, len(files))
+        generate_report(results, len(files), strategy_name)
     else:
         print("💡 扫描完成，未发现符合策略的标的。")
 

@@ -37,9 +37,9 @@ TOOLS = [
             "properties": {
                 "strategy": {
                     "type": "string",
-                    "enum": ["ma5"],
+                    "enum": ["ma5", "volume_breakout"],
                     "default": "ma5",
-                    "description": "扫描策略名称，目前支持 ma5 (MA5均线支撑策略)"
+                    "description": "扫描策略名称：ma5 (MA5均线支撑策略) 或 volume_breakout (放量突破策略，吸筹→启动，标记关键突破形态)"
                 },
                 "auto_open": {
                     "type": "boolean",
@@ -61,9 +61,9 @@ TOOLS = [
                 },
                 "strategy": {
                     "type": "string",
-                    "enum": ["ma5"],
+                    "enum": ["ma5", "volume_breakout"],
                     "default": "ma5",
-                    "description": "分析策略"
+                    "description": "分析策略：ma5 或 volume_breakout (放量突破策略)"
                 }
             },
             "required": ["code"]
@@ -198,12 +198,13 @@ async def handle_run_scanner(arguments: Dict[str, Any]) -> List[TextContent]:
         }, ensure_ascii=False))]
     
     if result_container.get("success"):
-        # 检查报告文件
-        report_path = "./scanner_report.html"
+        # 检查报告文件（根据策略名生成文件名）
+        report_path = f"./scanner_report_{strategy}.html"
         if os.path.exists(report_path):
             return [TextContent(type="text", text=json.dumps({
                 "success": True,
                 "message": "扫描完成",
+                "strategy": strategy,
                 "output": result_container.get("output", ""),
                 "report_path": os.path.abspath(report_path),
                 "report_exists": True
@@ -212,6 +213,7 @@ async def handle_run_scanner(arguments: Dict[str, Any]) -> List[TextContent]:
             return [TextContent(type="text", text=json.dumps({
                 "success": True,
                 "message": "扫描完成，未发现符合条件的标的",
+                "strategy": strategy,
                 "output": result_container.get("output", "")
             }, ensure_ascii=False))]
     else:

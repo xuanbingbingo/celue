@@ -3,7 +3,7 @@ import numpy as np
 
 def analyze(df):
     """
-    策略版本：V4 (中线增强版)
+    策略版本：V1 (中线版)
     核心逻辑：吸筹判定 -> 20日内出现缩量挖坑(诱空) -> 缩量回踩MA5(确认启动)
     """
     if df is None or len(df) < 60: 
