@@ -13,6 +13,10 @@ def update_stock_data():
     rs = bs.query_all_stock()
     while rs.next():
         code, status, name = rs.get_row_data()
+        # 剔除399开头的行业指数
+        pure_code = code.split('.')[1] if '.' in code else code
+        if pure_code.startswith('399'):
+            continue
         if not (code.startswith(('sh.6', 'sz.0', 'sz.3', 'bj.'))): continue
         
         file_path = f"{DATA_DIR}/{code}.csv"
@@ -20,9 +24,12 @@ def update_stock_data():
         # 1. 获取该股票本地最后一条日期
         last_date = "2025-01-01"
         if os.path.exists(file_path):
-            existing_df = pd.read_csv(file_path)
-            if not existing_df.empty:
-                last_date = existing_df.iloc[-1]['date']
+            try:
+                existing_df = pd.read_csv(file_path)
+                if not existing_df.empty and 'date' in existing_df.columns:
+                    last_date = existing_df.iloc[-1]['date']
+            except Exception:
+                pass  # 如果读取失败，使用默认日期
         
         # 如果最后日期就是今天，说明已经更新过了
         if last_date >= today: continue

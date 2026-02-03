@@ -3,8 +3,10 @@ import numpy as np
 
 def analyze(df):
     """
-    策略版本：V3.1 (突破回调版 - 增强)
+    策略版本：V3.2 (突破回调版 - 增强版)
     核心逻辑：大红小绿吸筹期 + 五日小幅放量 + 三连阳后缩量大跌
+    
+    新增筛选条件：近20日内未出现过连续四天及以上阴线
     
     阶段定义：
     - 🚀 启动期（重中之重）：满足启动期(重点)条件，且近5日内有效跌破三连阳最后一天的最低价，收盘下跌
@@ -33,6 +35,32 @@ def analyze(df):
     # 时间切片
     acc_period = df.iloc[-60:-20]
     recent_5d = df.iloc[-5:]
+    recent_20d = df.iloc[-20:]  # 近20日
+    
+    # ========== 0. 新增筛选：近20日内未出现连续四天及以上阴线 ==========
+    def has_consecutive_bearish(days_df, consecutive_days=4):
+        """检查是否出现连续N天及以上阴线"""
+        if len(days_df) < consecutive_days:
+            return False
+        
+        # 标记阴线（收盘 < 开盘）
+        days_df = days_df.copy()
+        days_df['is_bearish'] = days_df['close'] < days_df['open']
+        
+        # 检查连续阴线
+        consecutive_count = 0
+        for is_bear in days_df['is_bearish']:
+            if is_bear:
+                consecutive_count += 1
+                if consecutive_count >= consecutive_days:
+                    return True
+            else:
+                consecutive_count = 0
+        return False
+    
+    # 如果近20日出现连续4天及以上阴线，直接返回None
+    if has_consecutive_bearish(recent_20d, 4):
+        return None
     
     # ========== 1. 吸筹判定（大红小绿） ==========
     red_days = acc_period[acc_period['close'] > acc_period['open']]
@@ -55,15 +83,13 @@ def analyze(df):
     is_moderate_volume = max_vol_ratio < 3.0
     volume_ok = has_volume_expansion and is_moderate_volume
     
-    # ========== 3. 三连阳后缩量大跌判定（含重中之重逻辑） ==========
+    # ========== 3. 三连阳后缩量大跌判定 ==========
     has_three_rising = False
     has_crash = False
     crash_recovered = False
     
-    # 用于重中之重判断的数据
-    three_rising_last_low = None  # 三连阳最后一天的最低价
+    three_rising_last_low = None
     
-    # 检查最近20天内的三连阳+大跌组合
     for i in range(-20, -3):
         if i < -len(df) + 3:
             continue
@@ -72,7 +98,6 @@ def analyze(df):
         day2 = df.iloc[i+1]
         day3 = df.iloc[i+2]
         
-        # 三连阳判定
         rising_count = 0
         if day1['close'] > day1['open']: rising_count += 1
         if day2['close'] > day2['open']: rising_count += 1
@@ -82,9 +107,8 @@ def analyze(df):
         
         if rising_count >= 2 and total_gain > 3:
             has_three_rising = True
-            three_rising_last_low = day3['low']  # 记录三连阳最后一天的最低价
+            three_rising_last_low = day3['low']
             
-            # 检查第四天是否大跌
             crash_day = df.iloc[i+3]
             prev_day = day3
             
@@ -100,7 +124,6 @@ def analyze(df):
             if is_falling and break_low and is_shrinking and is_big_drop:
                 has_crash = True
                 
-                # 检查大跌后是否快速收复（3日内）
                 if i + 6 < 0:
                     crash_close = crash_day['close']
                     for j in range(i+4, min(i+7, 0)):
@@ -110,15 +133,12 @@ def analyze(df):
                 break
     
     # ========== 4. 重中之重判定 ==========
-    # 条件：近5日内，有效跌破三连阳最后一天的最低价，且收盘下跌
     is_key_signal = False
     if has_three_rising and three_rising_last_low is not None:
-        for i in range(-5, 0):  # 近5日
+        for i in range(-5, 0):
             if i < -len(df):
                 continue
             check_day = df.iloc[i]
-            # 有效跌破：最低价低于三连阳最后一天的最低价
-            # 收盘下跌：收盘价低于开盘价
             if check_day['low'] < three_rising_last_low and check_day['close'] < check_day['open']:
                 is_key_signal = True
                 break
@@ -126,7 +146,7 @@ def analyze(df):
     # ========== 5. 结果输出 ==========
     if has_three_rising and has_crash:
         if is_key_signal:
-            return "🚀 启动期（重中之重）"  # 最高优先级
+            return "🚀 启动期（重中之重）"
         elif crash_recovered:
             return "🚀 启动期（重点）"
         else:

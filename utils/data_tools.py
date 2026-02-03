@@ -255,8 +255,28 @@ def generate_report(results, total_scanned, strategy_name='ma5'):
         'totalHit': len(formatted_results)
     }, ensure_ascii=False)
 
-    # 生成文件名
-    html_file = f"scanner_report_{strategy_name}.html"
+    # 获取最新日期（从stock_data中读取）
+    latest_date_suffix = ""
+    try:
+        stock_data_dir = os.path.join(os.path.dirname(__file__), '..', 'stock_data')
+        if os.path.exists(stock_data_dir):
+            # 获取第一个CSV文件
+            csv_files = [f for f in os.listdir(stock_data_dir) if f.endswith('.csv')]
+            if csv_files:
+                sample_file = os.path.join(stock_data_dir, csv_files[0])
+                df = pd.read_csv(sample_file)
+                if not df.empty and 'date' in df.columns:
+                    latest_date = df['date'].iloc[-1]  # 获取最新日期
+                    # 提取月日 (格式: 2026-02-03 -> 0203)
+                    if '-' in str(latest_date):
+                        date_parts = str(latest_date).split('-')
+                        if len(date_parts) >= 3:
+                            latest_date_suffix = f"_{date_parts[1]}{date_parts[2]}"
+    except Exception:
+        pass  # 如果获取日期失败，不添加后缀
+    
+    # 生成文件名（带日期后缀）
+    html_file = f"scanner_report_{strategy_name}{latest_date_suffix}.html"
 
     # 读取模板文件
     template_path = os.path.join(os.path.dirname(__file__), '..', 'report_template.html')

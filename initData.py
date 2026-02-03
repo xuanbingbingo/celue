@@ -62,7 +62,10 @@ def init_database():
     # 5. 循环下载
     for code, status, name in tqdm(stock_list, desc="初始化进度"):
         # 严格匹配号段：沪深主板、创业板、科创板、北交所 (920/8/4)
+        # 剔除399开头的行业指数
         pure_code = code.split('.')[1]
+        if pure_code.startswith('399'):
+            continue
         if not (code.startswith(('sh.60', 'sh.68', 'sz.00', 'sz.30', 'bj.92', 'bj.8', 'bj.4'))):
             continue
         
