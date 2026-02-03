@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from index import run_scanner, analyze_single_stock
 from initData import init_database
 from appendData import update_stock_data
-from utils.data_tools import load_concept_map, update_concept_cache
+from utils.data_tools import load_concept_map, sync_concepts
 
 # 创建 MCP Server
 app = Server("stock-scanner-mcp")
@@ -316,7 +316,7 @@ async def handle_sync_concepts(arguments: Dict[str, Any]) -> List[TextContent]:
             
             f = io.StringIO()
             with redirect_stdout(f):
-                update_concept_cache()
+                sync_concepts()
             
             result_container["output"] = f.getvalue()
             result_container["success"] = True
