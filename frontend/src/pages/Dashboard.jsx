@@ -9,6 +9,12 @@ import { copyToClipboard } from '../utils/clipboard'
 
 // 阶段配置
 const STAGE_CONFIG = {
+  '🚀 启动期（重中之重）': {
+    bg: 'bg-rose-100',
+    border: 'border-rose-500',
+    text: 'text-rose-900',
+    desc: '近5日跌破三连阳最低价且收盘下跌，最强烈信号'
+  },
   '🚀 启动期（重点）': {
     bg: 'bg-red-100',
     border: 'border-red-400',

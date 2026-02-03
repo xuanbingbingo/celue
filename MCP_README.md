@@ -19,7 +19,7 @@
 |------|------|-----------|
 | `init_stock_data` | 初始化股票历史数据 | `initData.init_database()` |
 | `update_stock_data` | 增量更新最新数据 | `appendData.update_stock_data()` |
-| `sync_concepts` | 同步概念板块数据 | `data_tools.update_concept_cache()` |
+| `sync_concepts` | 同步概念板块数据 | `data_tools.sync_concepts()` |
 
 ### 3. 查询类
 
@@ -96,11 +96,17 @@ async def connect_sse(scope, receive, send):
 ```
 
 ### 执行完整扫描
+
+支持三种策略：
+- `ma5` - MA5均线支撑策略
+- `volume_breakout` - 放量突破策略（吸筹→启动）
+- `breakout_pullback` - 突破回调策略（大红小绿吸筹+放量+三连阳后缩量大跌）
+
 ```json
 {
   "name": "run_scanner",
   "arguments": {
-    "strategy": "ma5",
+    "strategy": "breakout_pullback",
     "auto_open": false
   }
 }

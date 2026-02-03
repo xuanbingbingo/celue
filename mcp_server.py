@@ -37,9 +37,9 @@ TOOLS = [
             "properties": {
                 "strategy": {
                     "type": "string",
-                    "enum": ["ma5", "volume_breakout"],
+                    "enum": ["ma5", "volume_breakout", "breakout_pullback"],
                     "default": "ma5",
-                    "description": "扫描策略名称：ma5 (MA5均线支撑策略) 或 volume_breakout (放量突破策略，吸筹→启动，标记关键突破形态)"
+                    "description": "扫描策略名称：ma5 (MA5均线支撑策略)、volume_breakout (放量突破策略) 或 breakout_pullback (突破回调策略，大红小绿吸筹+放量+三连阳后缩量大跌)"
                 },
                 "auto_open": {
                     "type": "boolean",
@@ -61,9 +61,9 @@ TOOLS = [
                 },
                 "strategy": {
                     "type": "string",
-                    "enum": ["ma5", "volume_breakout"],
+                    "enum": ["ma5", "volume_breakout", "breakout_pullback"],
                     "default": "ma5",
-                    "description": "分析策略：ma5 或 volume_breakout (放量突破策略)"
+                    "description": "分析策略：ma5 (MA5均线支撑)、volume_breakout (放量突破) 或 breakout_pullback (突破回调策略)"
                 }
             },
             "required": ["code"]

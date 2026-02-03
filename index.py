@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 从 utils/data_tools 导入
 from utils.data_tools import load_concept_map, load_stock_name_map, generate_report
-from strategies import ma5_support, volume_breakout
+from strategies import ma5_support, volume_breakout, breakout_pullback
 
 DATA_DIR = "./stock_data"
 
@@ -21,6 +21,11 @@ STRATEGY_MAP = {
         'name': 'volume_breakout',
         'func': volume_breakout.analyze,
         'description': '放量突破策略（吸筹→启动，无整理期）'
+    },
+    'breakout_pullback': {
+        'name': 'breakout_pullback',
+        'func': breakout_pullback.analyze,
+        'description': '突破回调策略（大红小绿吸筹+放量+三连阳后缩量大跌）'
     }
 }
 
